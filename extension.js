@@ -124,22 +124,54 @@ async function translateFiles(options) {
       let fileReplacements = 0;
       const fileChanges = [];
 
+      /**
+     * 转义字符串以便在正则表达式中安全使用
+     * @param {string} string - 需要转义的字符串
+     * @returns {string} 转义后的字符串
+     */
+    function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& 表示整个匹配的字符串[1,2](@ref)
+    }
+
       // 遍历翻译字典，执行替换操作
-      for (const [english, chinese] of Object.entries(translations)) {
-        const escapedEnglish = english.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escapedEnglish, 'g');
-        const matches = content.match(regex);
-        
-        if (matches && matches.length > 0) {
-          content = content.replace(regex, chinese);
-          fileReplacements += matches.length;
-          fileChanges.push({
+for (const [english, chinese] of Object.entries(translations)) {
+    const escapedEnglish = escapeRegExp(english);
+    let replacementCount = 0;
+    
+    // 1. 处理双引号内的内容（精确匹配双引号内的文本）
+    const quoteRegex = new RegExp(`(")${escapedEnglish}(")`, 'g');
+    const quoteMatches = content.match(quoteRegex);
+    
+    if (quoteMatches && quoteMatches.length > 0) {
+        content = content.replace(quoteRegex, `$1${chinese}$2`);
+        replacementCount += quoteMatches.length;
+        fileChanges.push({
+            type: 'quoted_text',
             original: english,
             translated: chinese,
-            count: matches.length
-          });
-        }
-      }
+            count: quoteMatches.length
+        });
+        console.log(`双引号内替换: "${english}" -> "${chinese}" (${quoteMatches.length} 次)`);
+    }
+    
+    // 2. 处理分号后的注释内容（匹配分号后直到行尾的内容）
+    const commentRegex = new RegExp(`(;\\s*)${escapedEnglish}`, 'g');
+    const commentMatches = content.match(commentRegex);
+    
+    if (commentMatches && commentMatches.length > 0) {
+        content = content.replace(commentRegex, `$1${chinese}`);
+        replacementCount += commentMatches.length;
+        fileChanges.push({
+            type: 'comment_line',
+            original: english,
+            translated: chinese,
+            count: commentMatches.length
+        });
+        console.log(`注释行替换: "; ${english}" -> "; ${chinese}" (${commentMatches.length} 次)`);
+    }
+    
+    fileReplacements += replacementCount;
+}
 
       // 写入翻译后的内容到输出文件
       fs.writeFileSync(exportPath, content, 'utf8');
