@@ -1,6 +1,6 @@
 # 批量翻译插件
 🎉 项目初始化完成
-一个用于批量翻译配置文件的VSCode插件。
+- 一个用于批量翻译配置文件的VSCode插件。
 
 ## 功能特性
 
@@ -15,7 +15,7 @@
 
  - 💡使用方法:
    - 1. 将需要翻译的.ini文件放入 input/ 目录
-   - 2. 将需要字典写入key.xlsx表格放入 excel/ 目录 或者  编辑 translations.json 文件，添加翻译词条
+   - 2. 将需要翻译的英文字符串和对应中文写入key.xlsx表格放入 excel/ 目录 或者  编辑 translations.json 文件，添加翻译词条
    - 3. 运行: node extension.js translate       普通翻译模式
    - 4. node extension.js translate --verbose   详细模式
    - 5. node extension.js test                  运行测试
