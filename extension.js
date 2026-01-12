@@ -16,6 +16,264 @@ program
   .description('批量翻译INI配置文件的命令行工具')
   .version('1.0.0');
 
+// 尝试加载 xlsx 库，如果未安装会提示用户安装
+let xlsx;
+try {
+    xlsx = require('xlsx');
+} catch (error) {
+    console.log('⚠️  xlsx 模块未安装，Excel 转换功能将不可用');
+    console.log('💡 请运行: npm install xlsx');
+}
+
+
+/**
+ * 将 Excel 文件转换为 translations.json（合并模式，不覆盖已有内容）
+ * @param {string} excelPath - Excel 文件路径
+ * @param {string} outputPath - 输出 JSON 文件路径
+ */
+function convertExcelToJson(excelPath, outputPath) {
+    if (!xlsx) {
+        console.error('❌ 错误: xlsx 模块未安装，无法读取 Excel 文件');
+        console.log('💡 请运行: npm install xlsx');
+        return false;
+    }
+    
+    try {
+        // 1. 读取现有的 translations.json（如果存在）
+        let existingTranslations = {};
+        if (fs.existsSync(outputPath)) {
+            try {
+                const existingData = fs.readFileSync(outputPath, 'utf8');
+                existingTranslations = JSON.parse(existingData);
+                console.log(`📁 找到现有翻译字典，包含 ${Object.keys(existingTranslations).length} 个词条`);
+            } catch (err) {
+                console.warn(`⚠️  读取现有 translations.json 时出错: ${err.message}`);
+                console.log('💡 将创建新的翻译字典');
+            }
+        } else {
+            console.log('📁 未找到 translations.json，将创建新文件');
+        }
+        
+        console.log(`\n📊 正在读取 Excel 文件: ${excelPath}`);
+        
+        // 2. 读取 Excel 文件
+        const workbook = xlsx.readFile(excelPath);
+        
+        // 获取第一个工作表
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // 获取表头（第一行）来确定列名
+        const header = {};
+        const range = xlsx.utils.decode_range(worksheet['!ref']);
+        
+        // 读取第一行作为表头
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cellAddress = {c: C, r: 0};
+            const cellRef = xlsx.utils.encode_cell(cellAddress);
+            const cell = worksheet[cellRef];
+            if (cell && cell.v) {
+                header[C] = cell.v.toString().trim();
+            }
+        }
+        
+        // 将工作表转换为 JSON
+        const jsonData = xlsx.utils.sheet_to_json(worksheet, {header: Object.values(header)});
+        
+        if (jsonData.length === 0) {
+            console.error('❌ 错误: Excel 文件中没有数据');
+            return false;
+        }
+        
+        console.log(`📊 Excel 文件有 ${jsonData.length} 行数据`);
+        console.log(`📊 列名: ${Object.keys(jsonData[0]).join(', ')}`);
+        
+        // 3. 转换数据格式
+        const newTranslations = {};
+        let skippedRows = 0;
+        let addedCount = 0;
+        let updatedCount = 0;
+        let unchangedCount = 0;
+        
+        jsonData.forEach((row, index) => {
+            const rowNum = index + 2; // Excel行号（从1开始，表头是第1行）
+            
+            // 获取 key 和 value 列
+            let key = null;
+            let value = null;
+            
+            // 查找列名（不区分大小写）
+            for (const [colName, colValue] of Object.entries(row)) {
+                if (colName && colValue !== undefined) {
+                    const colNameLower = colName.toLowerCase();
+                    if (colNameLower === 'key' || colNameLower === '键' || colNameLower === '英文') {
+                        key = colValue;
+                    } else if (colNameLower === 'value' || colNameLower === '值' || colNameLower === '中文') {
+                        value = colValue;
+                    }
+                }
+            }
+            
+            // 如果没找到标准列名，尝试第一列作为key，第二列作为value
+            if (!key || !value) {
+                const entries = Object.entries(row);
+                if (entries.length >= 2) {
+                    key = entries[0][1];
+                    value = entries[1][1];
+                }
+            }
+            
+            if (key !== null && value !== null) {
+                // 清理数据
+                const cleanKey = key.toString().trim();
+                const cleanValue = value.toString().trim();
+                
+                if (cleanKey && cleanValue) {
+                    // 检查是否已存在
+                    if (existingTranslations.hasOwnProperty(cleanKey)) {
+                        if (existingTranslations[cleanKey] !== cleanValue) {
+                            // 值不同，更新
+                            newTranslations[cleanKey] = cleanValue;
+                            updatedCount++;
+                            console.log(`   🔄 行 ${rowNum}: 更新 "${cleanKey}" (旧: "${existingTranslations[cleanKey]}", 新: "${cleanValue}")`);
+                        } else {
+                            // 值相同，保持不变
+                            newTranslations[cleanKey] = cleanValue;
+                            unchangedCount++;
+                        }
+                    } else {
+                        // 新键
+                        newTranslations[cleanKey] = cleanValue;
+                        addedCount++;
+                        console.log(`   ➕ 行 ${rowNum}: 添加 "${cleanKey}" -> "${cleanValue}"`);
+                    }
+                } else {
+                    skippedRows++;
+                    console.log(`   ⚠️  行 ${rowNum}: 跳过 - 键或值为空`);
+                }
+            } else {
+                skippedRows++;
+                console.log(`   ⚠️  行 ${rowNum}: 跳过 - 未找到键值对`);
+            }
+        });
+        
+        if (Object.keys(newTranslations).length === 0) {
+            console.error('❌ 错误: 无法从 Excel 中提取有效的键值对');
+            return false;
+        }
+        
+        // 4. 合并新旧数据（保留原有但未在Excel中出现的条目）
+        const mergedTranslations = {...existingTranslations, ...newTranslations};
+        
+        // 5. 按key排序
+        const sortedTranslations = {};
+        Object.keys(mergedTranslations).sort().forEach(key => {
+            sortedTranslations[key] = mergedTranslations[key];
+        });
+        
+        // 6. 写入 JSON 文件
+        fs.writeFileSync(outputPath, JSON.stringify(sortedTranslations, null, 2), 'utf8');
+        
+        console.log(`\n✅ 转换并合并成功!`);
+        console.log(`   📁 Excel 文件: ${path.resolve(excelPath)}`);
+        console.log(`   📁 JSON 文件: ${path.resolve(outputPath)}`);
+        console.log(`\n📊 转换统计:`);
+        console.log(`   📄 原有词条: ${Object.keys(existingTranslations).length} 个`);
+        console.log(`   📄 新增词条: ${addedCount} 个`);
+        console.log(`   📄 更新词条: ${updatedCount} 个`);
+        console.log(`   📄 未变化词条: ${unchangedCount} 个`);
+        console.log(`   📄 跳过行数: ${skippedRows} 行`);
+        console.log(`   📄 合并后总数: ${Object.keys(mergedTranslations).length} 个`);
+        
+        // 显示前几个转换结果
+        console.log(`\n📋 前5个转换结果:`);
+        const entries = Object.entries(newTranslations);
+        for (let i = 0; i < Math.min(5, entries.length); i++) {
+            const [key, value] = entries[i];
+            const isNew = !existingTranslations.hasOwnProperty(key);
+            console.log(`   ${isNew ? '➕' : '🔄'} "${key}": "${value}"`);
+        }
+        if (entries.length > 5) {
+            console.log(`   ... 还有 ${entries.length - 5} 个`);
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error(`\n❌ 转换 Excel 文件时出错: ${error.message}`);
+        console.error(`📋 错误详情:`, error);
+        return false;
+    }
+}
+
+/**
+ * 主函数 - 转换 excel/key.xlsx 到 translations.json
+ */
+function convertExcelToJsonMain() {
+    const excelPath = path.join(__dirname, 'excel', 'key.xlsx');
+    const outputPath = path.join(__dirname, 'translations.json');
+    
+    console.log('🚀 开始转换 Excel 文件到 translations.json\n');
+    console.log(`📁 工作目录: ${__dirname}`);
+    console.log(`📁 Excel 文件: ${excelPath}`);
+    console.log(`📁 输出文件: ${outputPath}`);
+    console.log('-'.repeat(50));
+    
+    // 检查 Excel 文件是否存在
+    if (!fs.existsSync(excelPath)) {
+        console.error(`❌ 错误: Excel 文件不存在: ${excelPath}`);
+        console.log('💡 请检查:');
+        console.log(`   1. 确保 excel/key.xlsx 文件存在`);
+        console.log(`   2. 确保文件扩展名是 .xlsx 或 .xls`);
+        console.log(`   3. 确保文件没有被其他程序占用`);
+        return false;
+    }
+    
+    // 执行转换
+    const success = convertExcelToJson(excelPath, outputPath);
+    
+    if (success) {
+        console.log('\n🎉 转换完成!');
+        console.log('💡 现在可以运行翻译命令: node extension.js translate');
+    } else {
+        console.error('\n❌ 转换失败!');
+    }
+    
+    return success;
+}
+
+/**
+ * 查找 Excel 文件
+ */
+function findExcelFile() {
+    const possiblePaths = [
+        'excel/key.xlsx',
+        'excel/key.xls',
+        'key.xlsx',
+        'key.xls',
+        './excel/*.xlsx',
+        './excel/*.xls',
+        './*.xlsx',
+        './*.xls'
+    ];
+    
+    for (const pattern of possiblePaths) {
+        if (pattern.includes('*')) {
+            const dir = pattern.split('/')[0];
+            const files = fs.readdirSync(dir || '.').filter(file => 
+                file.endsWith('.xlsx') || file.endsWith('.xls')
+            );
+            if (files.length > 0) {
+                return path.join(dir || '.', files[0]);
+            }
+        } else if (fs.existsSync(pattern)) {
+            return pattern;
+        }
+    }
+    
+    return null;
+}
+
 /**
  * 主翻译函数
  * @param {object} options - 命令行选项
@@ -23,7 +281,7 @@ program
 async function translateFiles(options) {
   const startTime = Date.now();
   const workspaceRoot = process.cwd();
-  
+  convertExcelToJsonMain();
   console.log('🚀 开始批量翻译...\n');
   console.log(`工作目录: ${workspaceRoot}`);
   
@@ -51,6 +309,7 @@ async function translateFiles(options) {
     console.log('💡 提示: 请创建翻译字典文件或在命令行中指定 --translations <文件>');
     return;
   }
+
 
   // 加载翻译字典
   let translations;
@@ -252,9 +511,10 @@ function initProject() {
     
     fs.writeFileSync('translations.json', 
       JSON.stringify(exampleTranslations, null, 2));
-    console.log('✅ 创建示例翻译字典: translations.json');
+    convertExcelToJsonMain();
   } else {
-    console.log('📄 翻译字典已存在: translations.json');
+    convertExcelToJsonMain();
+    console.log('📄 翻译字典已更新: translations.json');
   }
   
   // 创建示例INI文件

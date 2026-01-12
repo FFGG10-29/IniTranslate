@@ -4,9 +4,10 @@
 
 ## 功能特性
 
-- 📁 工作目录: A:\BaiduSyncdisk\桌面\VSProject\IniTranslate
+- 📁 工作目录: .\IniTranslate
 - 🔤 输入目录: input
 - 📊 输出目录: export
+- 🔄 表格目录：excel
 - ⚡ 备份目录: backup
 - 🎯 翻译字典: translations.json
 
@@ -14,5 +15,8 @@
 
  - 💡使用方法:
    - 1. 将需要翻译的.ini文件放入 input/ 目录
-   - 2. 编辑 translations.json 文件，添加翻译词条
-   - 3. 运行: node extension.js translate
+   - 2. 将需要字典写入key.xlsx表格放入 excel/ 目录 或者  编辑 translations.json 文件，添加翻译词条
+   - 3. 运行: node extension.js translate       普通翻译模式
+   - 4. node extension.js translate --verbose   详细模式
+   - 5. node extension.js test                  运行测试
+   - 6. node extension.js clean                 清理目录

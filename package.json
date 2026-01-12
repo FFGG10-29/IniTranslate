@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "commander": "^14.0.2"
+    "commander": "^14.0.2",
+    "xlsx": "^0.18.5"
   }
 }

@@ -1,13 +1,8 @@
 {
-    
-    "cc_brake": "配置",
-    "cc_setpoint_speed": "设置",
-    "cc_clutch_down": "参数",
-    "cc_clutch_up": "数值",
-    "cc_setpoint_rpm": "最小值",
-    "cc_error_speed": "最大值",
-    "float bias_resistor;Pull-up resistor value on your board": "提色色过生日的发红包前",
-    "here 'bias_resistor' is internal field name and the text between semicolons is what produces the tooltip": "的都不敢打不打算十点半阈值",
-    "Note that '+' sign is required after first semicolon for tooltip to appear in TunerStudio": "滞说得不对是不是bf风是不是都不是都不是的后"
-  
+  "Note that '+' sign is required after first semicolon for tooltip to appear in TunerStudio": "滞说得不对是不是bf风是不是都不是都不是的后",
+  "cc_brake": "配置",
+  "cc_clutch_down": "参数",
+  "cc_setpoint_speed": "设置",
+  "float bias_resistor;Pull-up resistor value on your board": "提色色过生日的发红包前",
+  "key": "value"
 }
