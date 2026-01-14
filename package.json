@@ -1,6 +1,27 @@
 {
+  "name": "ini-translate-tool",
+  "version": "1.0.0",
+  "description": "独立的INI文件批量翻译工具",
+  "main": "extension.js",
+  "scripts": {
+    "build": "node package.js",
+    "pack": "npm run build",
+    "clean": "rm -rf dist/ ini-translate-tool.zip"
+  },
+  "keywords": ["ini", "translate", "translation", "cli", "tool"],
+  "author": "Your Name",
+  "license": "MIT",
   "dependencies": {
-    "commander": "^14.0.2",
-    "xlsx": "^0.18.5"
+    "commander": "^9.4.1"
+  },
+  "devDependencies": {
+    "archiver": "^5.3.1",
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "assets": [
+      "*.json",
+      "excel/**/*"
+    ]
   }
 }

@@ -20,3 +20,5 @@
    - 4. node extension.js translate --verbose   详细模式
    - 5. node extension.js test                  运行测试
    - 6. node extension.js clean                 清理目录
+   - 7. npm run build                           打包项目
+
