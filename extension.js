@@ -388,50 +388,46 @@ async function translateFiles(options) {
      * @param {string} string - 需要转义的字符串
      * @returns {string} 转义后的字符串
      */
+    // 辅助函数：将普通字符串转换为正则表达式安全格式（如果尚未定义）
     function escapeRegExp(string) {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& 表示整个匹配的字符串[1,2](@ref)
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-      // 遍历翻译字典，执行替换操作
-for (const [english, chinese] of Object.entries(translations)) {
-    const escapedEnglish = escapeRegExp(english);
+    // 遍历翻译字典，执行替换操作
+    for (const [english, chinese] of Object.entries(translations)) {
+    
+    // 改进1: 处理空格灵活性（如果是多词短语）
+    const words = english.split(/\s+/);
+    const flexibleEnglish = words.join(`\\s+`); // 使用 `\s+` 匹配至少一个空格，更符合自然语言习惯
+
+    const escapedEnglish = escapeRegExp(flexibleEnglish);
     let replacementCount = 0;
-    
-    // 1. 处理双引号内的内容（精确匹配双引号内的文本）
-    const quoteRegex = new RegExp(`(")${escapedEnglish}(")`, 'g');
-    const quoteMatches = content.match(quoteRegex);
-    
-    if (quoteMatches && quoteMatches.length > 0) {
+
+    // 改进2: 构建忽略大小写且能处理空格的正则表达式
+    // 使用 `\\b` 单词边界来确保匹配整个单词，避免匹配到部分单词
+    const quoteRegex = new RegExp(`(")\\s*${escapedEnglish}\\s*(")`, 'gi'); // 也允许引号内有空格
+
+    let match;
+    const matches = [];
+    // 使用 while 循环来找出所有匹配项
+    while ((match = quoteRegex.exec(content)) !== null) {
+        matches.push(match);
+    }
+
+    if (matches.length > 0) {
+        // 执行替换
         content = content.replace(quoteRegex, `$1${chinese}$2`);
-        replacementCount += quoteMatches.length;
+        replacementCount = matches.length;
         fileChanges.push({
             type: 'quoted_text',
             original: english,
             translated: chinese,
-            count: quoteMatches.length
+            count: matches.length
         });
-        console.log(`双引号内替换: "${english}" -> "${chinese}" (${quoteMatches.length} 次)`);
-    }
-    
-    // 2. 处理分号后的注释内容（匹配分号后直到行尾的内容）
-    const commentRegex = new RegExp(`(;\\s*)${escapedEnglish}`, 'g');
-    const commentMatches = content.match(commentRegex);
-    
-    if (commentMatches && commentMatches.length > 0) {
-        content = content.replace(commentRegex, `$1${chinese}`);
-        replacementCount += commentMatches.length;
-        fileChanges.push({
-            type: 'comment_line',
-            original: english,
-            translated: chinese,
-            count: commentMatches.length
-        });
-        console.log(`注释行替换: "; ${english}" -> "; ${chinese}" (${commentMatches.length} 次)`);
-    }
-    
+        console.log(`替换: "${english}" -> "${chinese}" (${matches.length} 次)，模式为 /"\\s*${flexibleEnglish}\\s*"/gi`);
+    }   
     fileReplacements += replacementCount;
 }
-
       // 写入翻译后的内容到输出文件
       fs.writeFileSync(exportPath, content, 'utf8');
 
